@@ -3,7 +3,8 @@ from PIL import Image
 import base64
 from io import BytesIO
 import os
-from openai import OpenAI
+import openai
+
 
 def encode_image_to_base64(image: Image.Image) -> str:
     buffered = BytesIO()
