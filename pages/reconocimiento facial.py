@@ -68,10 +68,13 @@ if uploaded_file:
             ]
 
             try:
-                response = openai.chat.completions.create(
-                    model="gpt-4o",
-                    messages=messages,
-                    max_tokens=150
+                response = openai.ChatCompletion.create(
+    model="gpt-4o",
+    messages=messages,
+    max_tokens=150
+)
+full_response = response['choices'][0]['message']['content']
+
                 )
 
                 full_response = response.choices[0].message.content
