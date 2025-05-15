@@ -34,7 +34,8 @@ if uploaded_file:
         # Intentamos abrir la imagen con PIL
         image = Image.open(uploaded_file)
         with st.expander("Imagen", expanded=True):
-            st.image(image, caption=uploaded_file.name, use_container_width=True)
+            st.image(image, caption=uploaded_file.name, width=700)  # Ajusta el tamaño si deseas
+
     except Exception as e:
         st.error(f"No se pudo mostrar la imagen. Asegúrate de que sea un archivo de imagen válido. Error: {e}")
         st.stop()
