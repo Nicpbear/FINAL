@@ -2,42 +2,41 @@ import streamlit as st
 import speech_recognition as sr
 import paho.mqtt.client as mqtt
 
-# Configuración MQTT
+# Configuración MQTT (ajusta el broker y tópico según tu caso)
 MQTT_BROKER = "broker.hivemq.com"
 MQTT_PORT = 1883
-MQTT_TOPIC = "voz/puerta"
+MQTT_TOPIC = "tu/topico"
 
-def enviar_mensaje_mqtt(mensaje):
-    client = mqtt.Client()
-    client.connect(MQTT_BROKER, MQTT_PORT, 60)
-    client.publish(MQTT_TOPIC, mensaje)
-    client.disconnect()
+# Crear cliente MQTT y conectar
+client = mqtt.Client()
+client.connect(MQTT_BROKER, MQTT_PORT, 60)
 
-st.title("Reconocimiento de voz: solo 'casa'")
+st.title("Reconocimiento de voz para abrir puerta")
 
-if st.button("Grabar y reconocer"):
-    recognizer = sr.Recognizer()
+r = sr.Recognizer()
+
+# Pedir al usuario que hable
+st.write("Por favor, di la palabra clave para desbloquear la puerta:")
+
+try:
     with sr.Microphone() as source:
-        st.info("Escuchando... Di la palabra 'casa'")
-        recognizer.adjust_for_ambient_noise(source)
-        audio = recognizer.listen(source)
+        audio = r.listen(source, timeout=5)  # escuchar la voz, timeout ajustable
 
-    try:
-        texto = recognizer.recognize_google(audio, language="es-ES")
-        st.write(f"Dijiste: **{texto}**")
+    # Reconocer texto usando Google
+    text = r.recognize_google(audio, language="es-ES")
+    st.write(f"Dijiste: {text}")
 
-        # Compara texto ignorando punto final y mayúsculas
-        texto_normalizado = texto.lower().strip()
-        if texto_normalizado == "casa" or texto_normalizado == "casa.":
-            st.success("🚪 Puerta desbloqueada")
-            enviar_mensaje_mqtt("unlock")
-        else:
-            st.error("❌ Palabra incorrecta")
+    # Validar palabra clave
+    if text.lower() in ["casa", "casa."]:
+        st.success("Puerta desbloqueada")
+        # Enviar mensaje por MQTT
+        client.publish(MQTT_TOPIC, "casa")
+    else:
+        st.error("Incorrecto")
 
-    except sr.UnknownValueError:
-        st.error("No se entendió lo que dijiste")
-    except sr.RequestError as e:
-        st.error(f"Error con el servicio de reconocimiento: {e}")
-    except Exception as e:
-        st.error(f"Error inesperado: {e}")
-
+except sr.WaitTimeoutError:
+    st.error("No detecté ninguna voz. Intenta de nuevo.")
+except sr.UnknownValueError:
+    st.error("No entendí lo que dijiste. Intenta de nuevo.")
+except Exception as e:
+    st.error(f"Error inesperado: {e}")
