@@ -1,8 +1,11 @@
 import streamlit as st
+from streamlit_webrtc import webrtc_streamer
+import speech_recognition as sr
+import threading
+import queue
 import paho.mqtt.client as mqtt
 import re
 
-# Configuración MQTT
 MQTT_BROKER = "broker.hivemq.com"
 MQTT_PORT = 1883
 MQTT_TOPIC = "voz/puerta"
@@ -13,52 +16,63 @@ def enviar_mensaje_mqtt(mensaje):
     client.publish(MQTT_TOPIC, mensaje)
     client.disconnect()
 
-st.title("🎤 Desbloqueo por voz con vista previa de texto")
-st.write("Haz clic en el botón y di la palabra secreta: **Casa**")
+st.title("🎤 Desbloqueo por voz con streamlit-webrtc")
 
-# Código HTML y JS para reconocimiento de voz
-html_code = """
-<html>
-  <body>
-    <input type="text" id="textoVoz" style="width: 100%; font-size: 1.2rem;" placeholder="Aquí aparecerá el texto reconocido" readonly />
-    <button onclick="reconocer()" style="padding: 10px 20px; font-size: 16px; margin-top: 10px;">🎙️ Hablar</button>
+texto_reconocido = st.empty()
+mensaje = st.empty()
 
-    <script>
-      function reconocer() {
-          var recognition = new webkitSpeechRecognition();
-          recognition.lang = "es-ES";
+# Cola para pasar audio desde el callback a la función principal
+q = queue.Queue()
 
-          recognition.onresult = function(event) {
-              var texto = event.results[0][0].transcript.toLowerCase();
-              document.getElementById("textoVoz").value = texto;
+def audio_callback(frame):
+    audio_bytes = frame.to_ndarray(format="int16")
+    q.put(audio_bytes)
+    return frame
 
-              // Actualizar query params para que Streamlit detecte la palabra
-              window.history.replaceState(null, null, '?voz_detectada=' + encodeURIComponent(texto));
-          }
-          recognition.start();
-      }
-    </script>
-  </body>
-</html>
-"""
+def reconocer_voz():
+    recognizer = sr.Recognizer()
+    mic = sr.Microphone()
 
-st.components.v1.html(html_code, height=150)
+    with mic as source:
+        recognizer.adjust_for_ambient_noise(source)
 
-params = st.query_params
-voz = params.get("voz_detectada", [""])[0]
+    while True:
+        if not q.empty():
+            audio_data = q.get()
+            audio = sr.AudioData(audio_data.tobytes(), 16000, 2)
 
-if voz:
-    st.write(f"🔊 Dijiste: **{voz}**")
+            try:
+                texto = recognizer.recognize_google(audio, language="es-ES")
+                st.session_state['voz'] = texto.lower()
+                break
+            except sr.UnknownValueError:
+                st.session_state['voz'] = ""
+                break
+            except Exception as e:
+                st.session_state['voz'] = ""
+                break
 
-    voz_limpia = re.sub(r'[^\w\s]', '', voz).strip().lower()
+webrtc_streamer(
+    key="mic",
+    audio_frame_callback=audio_callback,
+    media_stream_constraints={"audio": True, "video": False},
+    async_processing=True,
+)
 
-    if voz_limpia == "casa":
-        st.markdown("<h1 style='color:green;'>🚪 Puerta desbloqueada</h1>", unsafe_allow_html=True)
-        enviar_mensaje_mqtt("unlock")
+if 'voz' not in st.session_state:
+    st.session_state['voz'] = ""
+
+if st.button("Reconocer palabra"):
+    reconocer_voz()
+    voz = st.session_state['voz']
+
+    if voz:
+        texto_reconocido.write(f"🔊 Dijiste: **{voz}**")
+        voz_limpia = re.sub(r'[^\w\s]', '', voz).strip().lower()
+        if voz_limpia == "casa":
+            mensaje.markdown("<h2 style='color:green;'>🚪 Puerta desbloqueada</h2>", unsafe_allow_html=True)
+            enviar_mensaje_mqtt("unlock")
+        else:
+            mensaje.markdown("<h2 style='color:red;'>❌ Palabra incorrecta</h2>", unsafe_allow_html=True)
     else:
-        st.markdown("<h1 style='color:red;'>❌ Palabra incorrecta</h1>", unsafe_allow_html=True)
-
-    if st.button("🔄 Intentar de nuevo"):
-        # Limpiar query params para reiniciar
-        st.experimental_set_query_params()
-        st.experimental_rerun()
+        mensaje.markdown("<h2 style='color:orange;'>❌ No se reconoció la voz, intenta de nuevo</h2>", unsafe_allow_html=True)
