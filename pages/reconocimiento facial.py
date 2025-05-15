@@ -1,6 +1,7 @@
 import streamlit as st
 import base64
-from openai import OpenAI
+import openai
+
 
 def encode_image(image_file):
     return base64.b64encode(image_file.read()).decode("utf-8")
