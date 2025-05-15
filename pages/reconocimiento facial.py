@@ -1,7 +1,7 @@
 import os
 import streamlit as st
 import base64
-from openai import OpenAI
+import openai
 from PIL import Image  # Importar PIL para abrir imágenes
 
 # Función para codificar la imagen en base64
