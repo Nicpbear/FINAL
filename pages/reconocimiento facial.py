@@ -25,7 +25,6 @@ if not api_key:
 # Cliente de OpenAI
 openai.api_key = api_key
 
-
 # Subida de imagen
 uploaded_file = st.file_uploader("Sube una imagen", type=["jpg", "png", "jpeg"])
 
@@ -69,13 +68,13 @@ if uploaded_file:
             ]
 
             try:
-                full_response = ""
-                for completion in client.chat.completions.create(
-                    model="gpt-4o", messages=messages, max_tokens=150, stream=True
-                ):
-                    if completion.choices[0].delta.content is not None:
-                        full_response += completion.choices[0].delta.content
+                response = openai.chat.completions.create(
+                    model="gpt-4o",
+                    messages=messages,
+                    max_tokens=150
+                )
 
+                full_response = response.choices[0].message.content
                 respuesta_lower = full_response.lower()
 
                 if "sí" in respuesta_lower or "si" in respuesta_lower:
