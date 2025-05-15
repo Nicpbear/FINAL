@@ -1,7 +1,8 @@
 import os
 import streamlit as st
 import base64
-from openai import OpenAI
+import openai
+
 
 # Función para codificar la imagen a base64
 def encode_image(image_file):
