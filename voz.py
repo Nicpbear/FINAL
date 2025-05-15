@@ -2,13 +2,13 @@ import streamlit as st
 import paho.mqtt.client as mqtt
 import tempfile
 import os
+import speech_recognition as sr
 
 # Configuración del broker MQTT
 MQTT_BROKER = "broker.hivemq.com"
 MQTT_PORT = 1883
 MQTT_TOPIC = "voz/puerta"
 
-# Función para enviar mensaje MQTT
 def enviar_mensaje_mqtt(mensaje):
     client = mqtt.Client()
     client.connect(MQTT_BROKER, MQTT_PORT, 60)
@@ -16,18 +16,21 @@ def enviar_mensaje_mqtt(mensaje):
     client.disconnect()
 
 st.title("🔊 Desbloqueo por voz")
-st.write("Di la palabra secreta para desbloquear.")
+st.write("Sube una grabación de voz diciendo la palabra clave.")
 
-audio_bytes = st.audio_recorder("🎤 Graba tu voz", format="audio/wav")
+# Subir archivo de audio
+audio_file = st.file_uploader("🎤 Sube un archivo de audio (WAV)", type=["wav"])
 
-if audio_bytes:
-    # Guardar el archivo temporalmente
+if audio_file is not None:
+    # Mostrar reproductor de audio
+    st.audio(audio_file, format='audio/wav')
+
+    # Guardar archivo temporal
     with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as temp_audio:
-        temp_audio.write(audio_bytes)
+        temp_audio.write(audio_file.read())
         temp_audio_path = temp_audio.name
 
-    # Usar speech_recognition solo localmente (asumiendo que ya funciona en tu entorno)
-    import speech_recognition as sr
+    # Procesar el audio
     recognizer = sr.Recognizer()
     with sr.AudioFile(temp_audio_path) as source:
         audio = recognizer.record(source)
@@ -48,7 +51,6 @@ if audio_bytes:
     except sr.RequestError as e:
         st.error(f"⚠️ Error con el reconocimiento de voz: {e}")
 
-    # Limpiar archivo temporal
+    # Borrar archivo temporal
     os.remove(temp_audio_path)
-
 
