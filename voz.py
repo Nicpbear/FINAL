@@ -19,7 +19,6 @@ st.write("Haz clic en el botón y di la palabra secreta: **Casa**")
 if "voz_detectada" not in st.session_state:
     st.session_state["voz_detectada"] = ""
 
-# HTML + JS para reconocimiento de voz y actualización en un input de Streamlit
 components.html("""
 <html>
   <body>
@@ -48,8 +47,7 @@ components.html("""
 </html>
 """, height=150)
 
-# Leer palabra reconocida desde query_params y guardarla en session_state para evitar reinicios constantes
-params = st.experimental_get_query_params()
+params = st.query_params
 if "voz_detectada" in params:
     palabra = params["voz_detectada"][0]
     st.session_state["voz_detectada"] = palabra
