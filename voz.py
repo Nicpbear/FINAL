@@ -52,24 +52,25 @@ components.html("""
 params = st.query_params
 if "voz_detectada" in params:
     palabra = params["voz_detectada"][0]
-    st.session_state["voz_detectada"] = palabra
-    st.experimental_rerun()
+    if palabra != st.session_state["voz_detectada"]:
+        st.session_state["voz_detectada"] = palabra
 
 voz = st.session_state["voz_detectada"]
 
-# Mostrar el texto que salió en el cuadro (puedes mantenerlo visible)
-st.write(f"🔊 Dijiste: **{voz}**")
+if voz:
+    st.write(f"🔊 Dijiste: **{voz}**")
 
-# Limpiamos puntuación (como puntos, comas, etc)
-voz_limpia = re.sub(r'[^\w\s]', '', voz).strip().lower()
+    # Limpiar puntuación y espacios
+    voz_limpia = re.sub(r'[^\w\s]', '', voz).strip().lower()
 
-if voz_limpia:
     if voz_limpia == "casa":
         st.markdown("<h1 style='color:green;'>🚪 Puerta desbloqueada</h1>", unsafe_allow_html=True)
         enviar_mensaje_mqtt("unlock")
     else:
         st.markdown("<h1 style='color:red;'>❌ Palabra incorrecta</h1>", unsafe_allow_html=True)
 
-    # Limpiar para que pueda repetir después
-    st.session_state["voz_detectada"] = ""
+    # Botón para reiniciar y limpiar texto
+    if st.button("🔄 Intentar de nuevo"):
+        st.session_state["voz_detectada"] = ""
+        st.experimental_rerun()
 
