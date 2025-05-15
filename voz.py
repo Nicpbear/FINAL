@@ -1,6 +1,5 @@
 import streamlit as st
 import paho.mqtt.client as mqtt
-import streamlit.components.v1 as components
 import re
 
 # Configuración MQTT
@@ -17,11 +16,8 @@ def enviar_mensaje_mqtt(mensaje):
 st.title("🎤 Desbloqueo por voz con vista previa de texto")
 st.write("Haz clic en el botón y di la palabra secreta: **Casa**")
 
-if "voz_detectada" not in st.session_state:
-    st.session_state["voz_detectada"] = ""
-    st.session_state["mensaje"] = ""
-
-components.html("""
+# Código HTML y JS para reconocimiento de voz
+html_code = """
 <html>
   <body>
     <input type="text" id="textoVoz" style="width: 100%; font-size: 1.2rem;" placeholder="Aquí aparecerá el texto reconocido" readonly />
@@ -36,31 +32,24 @@ components.html("""
               var texto = event.results[0][0].transcript.toLowerCase();
               document.getElementById("textoVoz").value = texto;
 
-              // Enviar texto reconocido a Streamlit vía URL (query param)
-              const iframe = document.createElement('iframe');
-              iframe.style.display = 'none';
-              iframe.src = '/?voz_detectada=' + encodeURIComponent(texto);
-              document.body.appendChild(iframe);
+              // Actualizar query params para que Streamlit detecte la palabra
+              window.history.replaceState(null, null, '?voz_detectada=' + encodeURIComponent(texto));
           }
           recognition.start();
       }
     </script>
   </body>
 </html>
-""", height=150)
+"""
+
+st.components.v1.html(html_code, height=150)
 
 params = st.query_params
-if "voz_detectada" in params:
-    palabra = params["voz_detectada"][0]
-    if palabra != st.session_state["voz_detectada"]:
-        st.session_state["voz_detectada"] = palabra
-
-voz = st.session_state["voz_detectada"]
+voz = params.get("voz_detectada", [""])[0]
 
 if voz:
     st.write(f"🔊 Dijiste: **{voz}**")
 
-    # Limpiar puntuación y espacios
     voz_limpia = re.sub(r'[^\w\s]', '', voz).strip().lower()
 
     if voz_limpia == "casa":
@@ -69,8 +58,7 @@ if voz:
     else:
         st.markdown("<h1 style='color:red;'>❌ Palabra incorrecta</h1>", unsafe_allow_html=True)
 
-    # Botón para reiniciar y limpiar texto
     if st.button("🔄 Intentar de nuevo"):
-        st.session_state["voz_detectada"] = ""
+        # Limpiar query params para reiniciar
+        st.experimental_set_query_params()
         st.experimental_rerun()
-
