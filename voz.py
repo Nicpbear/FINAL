@@ -1,42 +1,104 @@
+import os
+import time
+import json
+import paho.mqtt.client as paho
 import streamlit as st
-import speech_recognition as sr
-import paho.mqtt.client as mqtt
+from PIL import Image
+from bokeh.models.widgets import Button
+from bokeh.models import CustomJS
+from streamlit_bokeh_events import streamlit_bokeh_events
 
-# Configuración MQTT (ajusta el broker y tópico según tu caso)
-MQTT_BROKER = "broker.hivemq.com"
-MQTT_PORT = 1883
-MQTT_TOPIC = "tu/topico"
+# --- CONFIGURACIÓN MQTT ---
+BROKER = "157.230.214.127"
+PORT = 1883
+CLIENT_ID = "CONTROL-VOZ-MQTT"
 
-# Crear cliente MQTT y conectar
-client = mqtt.Client()
-client.connect(MQTT_BROKER, MQTT_PORT, 60)
+message_received = ""
 
-st.title("Reconocimiento de voz para abrir puerta")
+def on_publish(client, userdata, result):
+    print("✅ Mensaje MQTT enviado.")
 
-r = sr.Recognizer()
+def on_message(client, userdata, message):
+    global message_received
+    time.sleep(1)
+    message_received = str(message.payload.decode("utf-8"))
+    st.success(f"📩 MQTT dice: {message_received}")
 
-# Pedir al usuario que hable
-st.write("Por favor, di la palabra clave para desbloquear la puerta:")
+client = paho.Client(CLIENT_ID)
+client.on_message = on_message
 
-try:
-    with sr.Microphone() as source:
-        audio = r.listen(source, timeout=5)  # escuchar la voz, timeout ajustable
+# --- INTERFAZ STREAMLIT ---
+st.set_page_config(page_title="Control por Voz", layout="centered")
+st.markdown("""
+    <style>
+    .big-title { font-size:36px; font-weight:bold; text-align:center; color:#4CAF50; }
+    .section-title { font-size:24px; margin-top:30px; color:#333; }
+    </style>
+""", unsafe_allow_html=True)
 
-    # Reconocer texto usando Google
-    text = r.recognize_google(audio, language="es-ES")
-    st.write(f"Dijiste: {text}")
+st.markdown('<p class="big-title">🎧 Sistema de Control por Voz con MQTT</p>', unsafe_allow_html=True)
 
-    # Validar palabra clave
-    if text.lower() in ["casa", "casa."]:
-        st.success("Puerta desbloqueada")
-        # Enviar mensaje por MQTT
-        client.publish(MQTT_TOPIC, "casa")
+# Imagen decorativa
+st.image("voice_ctrl.jpg", width=250, caption="Control por Voz Activado")
+
+# Expansor para instrucciones
+with st.expander("🧭 ¿Cómo usar esta aplicación?"):
+    st.markdown("""
+    1. Haz clic en el botón de inicio.
+    2. Di la palabra `"casa"`.
+    3. Si dices "casa" o "casa." recibirás el mensaje "Puerta desbloqueada".
+    4. Si dices otra cosa, mostrará "Incorrecto".
+    5. El comando se enviará vía MQTT sólo si es correcto.
+    """)
+
+# Botón Bokeh personalizado
+st.markdown('<p class="section-title">🎙️ Presiona para hablar</p>', unsafe_allow_html=True)
+
+stt_button = Button(label="🔵 Iniciar Reconocimiento de Voz", width=300)
+stt_button.js_on_event("button_click", CustomJS(code="""
+    var recognition = new webkitSpeechRecognition();
+    recognition.continuous = true;
+    recognition.interimResults = true;
+
+    recognition.onresult = function (e) {
+        var value = "";
+        for (var i = e.resultIndex; i < e.results.length; ++i) {
+            if (e.results[i].isFinal) {
+                value += e.results[i][0].transcript;
+            }
+        }
+        if (value !== "") {
+            document.dispatchEvent(new CustomEvent("GET_TEXT", { detail: value }));
+        }
+    };
+    recognition.start();
+"""))
+
+# Captura del evento
+result = streamlit_bokeh_events(
+    stt_button,
+    events="GET_TEXT",
+    key="listener",
+    refresh_on_update=False,
+    override_height=100,
+    debounce_time=0
+)
+
+# Resultado del reconocimiento
+if result and "GET_TEXT" in result:
+    command = result.get("GET_TEXT").strip().lower()  # lowercase para comparar sin error
+    
+    st.markdown('<p class="section-title">📋 Comando Reconocido:</p>', unsafe_allow_html=True)
+    st.code(command, language='markdown')
+
+    # Verificamos que solo sea "casa" o "casa."
+    if command in ["casa", "casa."]:
+        st.success("✅ Puerta desbloqueada")
+        client.on_publish = on_publish
+        client.connect(BROKER, PORT)
+        msg = json.dumps({"Act1": "casa"})
+        client.publish("voice_ctrl", msg)
     else:
-        st.error("Incorrecto")
+        st.error("❌ Incorrecto")
 
-except sr.WaitTimeoutError:
-    st.error("No detecté ninguna voz. Intenta de nuevo.")
-except sr.UnknownValueError:
-    st.error("No entendí lo que dijiste. Intenta de nuevo.")
-except Exception as e:
-    st.error(f"Error inesperado: {e}")
+    os.makedirs("temp", exist_ok=True)
