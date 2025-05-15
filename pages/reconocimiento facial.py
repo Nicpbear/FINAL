@@ -22,7 +22,7 @@ if not api_key:
     st.warning("Por favor ingresa tu API key para continuar.")
     st.stop()
 
-# Cliente de OpenAI
+# Configurar API key para openai
 openai.api_key = api_key
 
 # Subida de imagen
@@ -69,15 +69,11 @@ if uploaded_file:
 
             try:
                 response = openai.ChatCompletion.create(
-    model="gpt-4o",
-    messages=messages,
-    max_tokens=150
-)
-full_response = response['choices'][0]['message']['content']
-
+                    model="gpt-4o",
+                    messages=messages,
+                    max_tokens=150
                 )
-
-                full_response = response.choices[0].message.content
+                full_response = response['choices'][0]['message']['content']
                 respuesta_lower = full_response.lower()
 
                 if "sí" in respuesta_lower or "si" in respuesta_lower:
