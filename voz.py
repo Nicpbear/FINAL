@@ -58,10 +58,10 @@ voz = st.session_state["voz_detectada"]
 if voz:
     st.write(f"🔊 Dijiste: **{voz}**")
     if voz.strip().lower() == "casa":
-        st.success("✅ Casa desbloqueada")
+        st.markdown("<h1 style='color:green;'>🚪 Puerta desbloqueada</h1>", unsafe_allow_html=True)
         enviar_mensaje_mqtt("unlock")
-        st.success("🚪 Señal enviada a Wokwi vía MQTT")
+        st.success("🚀 Señal enviada a Wokwi vía MQTT")
         st.session_state["voz_detectada"] = ""
     else:
-        st.error("❌ Palabra incorrecta. Intenta de nuevo.")
+        st.markdown("<h1 style='color:red;'>❌ Palabra incorrecta</h1>", unsafe_allow_html=True)
         st.session_state["voz_detectada"] = ""
