@@ -3,9 +3,8 @@ import streamlit as st
 import base64
 import openai
 
-# Función para codificar la imagen a base64
 def encode_image(image_file):
-    return base64.b64encode(image_file.getvalue()).decode("utf-8")
+    return base64.b64encode(image_file.read()).decode("utf-8")
 
 st.set_page_config(page_title="Análisis de imagen", layout="centered", initial_sidebar_state="collapsed")
 st.title("Análisis de Imagen:🤖🏞️")
@@ -16,11 +15,12 @@ os.environ['OPENAI_API_KEY'] = ke
 api_key = os.environ['OPENAI_API_KEY']
 openai.api_key = api_key
 
-uploaded_file = st.file_uploader("Sube una imagen", type=["jpg", "png", "jpeg"])
+# Usa la cámara para capturar imagen
+captured_image = st.camera_input("Toma una foto con tu cámara")
 
-if uploaded_file:
-    with st.expander("Imagen", expanded=True):
-        st.image(uploaded_file, caption=uploaded_file.name, use_container_width=True)
+if captured_image:
+    with st.expander("Imagen capturada", expanded=True):
+        st.image(captured_image, use_container_width=True)
 
 show_details = st.checkbox("Añadir detalles sobre la imagen", value=False)
 
@@ -29,9 +29,9 @@ if show_details:
 
 analyze_button = st.button("Analizar imagen")
 
-if uploaded_file is not None and api_key and analyze_button:
+if captured_image is not None and api_key and analyze_button:
     with st.spinner("Analizando ..."):
-        base64_image = encode_image(uploaded_file)
+        base64_image = encode_image(captured_image)
         prompt_text = "Describe lo que ves en la imagen en español."
 
         if show_details and additional_details:
@@ -66,7 +66,7 @@ if uploaded_file is not None and api_key and analyze_button:
 
 else:
     if analyze_button:
-        if not uploaded_file:
-            st.warning("Por favor, sube una imagen.")
+        if not captured_image:
+            st.warning("Por favor, toma una foto con la cámara.")
         if not api_key:
             st.warning("Por favor ingresa tu API Key.")
