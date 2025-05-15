@@ -23,7 +23,8 @@ if not api_key:
     st.stop()
 
 # Cliente de OpenAI
-client = OpenAI(api_key=api_key)
+openai.api_key = api_key
+
 
 # Subida de imagen
 uploaded_file = st.file_uploader("Sube una imagen", type=["jpg", "png", "jpeg"])
