@@ -1,48 +1,70 @@
 import streamlit as st
+from PIL import Image
 import base64
-import openai
+from io import BytesIO
+import os
+from openai import OpenAI
 
-st.set_page_config(page_title="Detección de personas en imagen", layout="centered")
+def encode_image_to_base64(image: Image.Image) -> str:
+    buffered = BytesIO()
+    image.save(buffered, format="JPEG")
+    img_bytes = buffered.getvalue()
+    return base64.b64encode(img_bytes).decode("utf-8")
 
-st.title("Detección de persona en la imagen 📸")
+st.set_page_config(page_title="Detección de Persona en Imagen", layout="centered")
 
-api_key = st.text_input("Ingresa tu API Key de OpenAI", type="password")
+st.title("📸 Captura una foto y detecta si hay una persona")
 
-if api_key:
-    openai.api_key = api_key
+api_key = st.text_input("Ingresa tu OpenAI API Key", type="password")
+if not api_key:
+    st.warning("Por favor ingresa tu API key para continuar.")
+    st.stop()
 
-    captured_image = st.camera_input("Toma una foto")
+os.environ["OPENAI_API_KEY"] = api_key
+client = OpenAI(api_key=api_key)
 
-    if captured_image is not None:
-        st.image(captured_image, caption="Imagen capturada", use_container_width=True)
+captured_image = st.camera_input("Toma una foto")
 
-        # Codificar imagen a base64 para enviar a OpenAI
-        img_bytes = captured_image.getvalue()
-        base64_img = base64.b64encode(img_bytes).decode()
+if captured_image:
+    img = Image.open(captured_image)
+    st.image(img, caption="Imagen capturada", use_container_width=True)
 
-        prompt = (
-            "Eres un modelo que analiza imágenes y responde solo con 'Sí' o 'No'. "
-            "Dime si en esta imagen hay una persona o un humano. "
-            "Imagen en base64: " + base64_img
-        )
+    with st.spinner("Analizando imagen..."):
+        try:
+            base64_img = encode_image_to_base64(img)
 
-        if st.button("Analizar imagen"):
-            with st.spinner("Analizando..."):
-                messages = [
-                    {"role": "user", "content": prompt}
-                ]
+            prompt_text = "En español, dime si en esta imagen hay una persona o humano y descríbela brevemente."
 
-                try:
-                    response = openai.ChatCompletion.create(
-                        model="gpt-4o",
-                        messages=messages,
-                        max_tokens=10,
-                        temperature=0
-                    )
-                    answer = response['choices'][0]['message']['content'].strip()
-                    st.success(f"Respuesta del modelo: {answer}")
-                except Exception as e:
-                    st.error(f"Error al llamar a OpenAI: {e}")
+            messages = [
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": prompt_text},
+                        {
+                            "type": "image_url",
+                            "image_url": {
+                                "url": f"data:image/jpeg;base64,{base64_img}"
+                            }
+                        },
+                    ],
+                }
+            ]
+
+            full_response = ""
+            message_placeholder = st.empty()
+
+            for completion in client.chat.completions.create(
+                model="gpt-4o-mini", messages=messages, max_tokens=500, stream=True
+            ):
+                delta_content = completion.choices[0].delta.get("content")
+                if delta_content:
+                    full_response += delta_content
+                    message_placeholder.markdown(full_response + "▌")
+
+            message_placeholder.markdown(full_response)
+
+        except Exception as e:
+            st.error(f"Error al analizar la imagen: {e}")
 
 else:
-    st.warning("Por favor ingresa tu API Key para usar la aplicación.")
+    st.write("Por favor, toma una foto para analizar.")
