@@ -36,7 +36,7 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-st.markdown('<p class="big-title">🎧 Sistema de Control por Voz con MQTT</p>', unsafe_allow_html=True)
+st.markdown('<p class="big-title">Desbloqueo de puerta con código 🔑​</p>', unsafe_allow_html=True)
 
 # Imagen decorativa
 st.image("voice_ctrl.jpg", width=250, caption="Control por Voz Activado")
