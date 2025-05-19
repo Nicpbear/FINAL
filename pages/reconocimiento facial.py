@@ -10,7 +10,7 @@ def encode_image(image_file):
 
 # Configuración de la página
 st.set_page_config(page_title="Desbloqueo Facial 😎​", layout="centered", initial_sidebar_state="collapsed")
-st.title("Análisis de Imagen: 🤖🏞️")
+st.title("Desbloqueo Facial 😎")
 
 # Entrada para la API Key
 ke = st.text_input('Ingresa tu Clave', type="password")
