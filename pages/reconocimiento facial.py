@@ -9,7 +9,7 @@ def encode_image(image_file):
     return base64.b64encode(image_file.getvalue()).decode("utf-8")
 
 # Configuración de la página
-st.set_page_config(page_title="Análisis de imagen", layout="centered", initial_sidebar_state="collapsed")
+st.set_page_config(page_title="Desbloqueo Facial 😎​", layout="centered", initial_sidebar_state="collapsed")
 st.title("Análisis de Imagen: 🤖🏞️")
 
 # Entrada para la API Key
