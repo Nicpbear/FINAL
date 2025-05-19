@@ -9,7 +9,7 @@ from bokeh.models import CustomJS
 from streamlit_bokeh_events import streamlit_bokeh_events
 
 # --- CONFIGURACIÓN MQTT ---
-BROKER = "157.230.214.127"
+BROKER = "broker.mqttdashboard.com"
 PORT = 1883
 CLIENT_ID = "CONTROL-VOZ-MQTT"
 
