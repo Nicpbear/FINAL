@@ -16,6 +16,8 @@ Streamlit-bokeh-events
 streamlit 
 openai
 opencv-python
+opencv-python-headless
+paho-mqtt
 
 
 
