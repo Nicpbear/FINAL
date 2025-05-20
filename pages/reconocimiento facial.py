@@ -1,89 +1,67 @@
-import os
-import streamlit as st
 import base64
 import openai
-from PIL import Image  # Importar PIL para abrir imágenes
+import streamlit as st
+from PIL import Image
+import paho.mqtt.client as paho
+import json
 
-# Función para codificar la imagen en base64
-def encode_image(image_file):
-    return base64.b64encode(image_file.getvalue()).decode("utf-8")
+# --- CONFIGURACIÓN OPENAI ---
+openai.api_key = st.secrets["openai_api_key"]  # Asegúrate de configurar esto en Streamlit Secrets
 
-# Configuración de la página
-st.set_page_config(page_title="Desbloqueo Facial 😎​", layout="centered", initial_sidebar_state="collapsed")
-st.title("Desbloqueo Facial 😎")
+# --- CONFIGURACIÓN MQTT ---
+BROKER = "broker.mqttdashboard.com"
+PORT = 1883
+CLIENT_ID = "FACIAL-MQTT"
 
-# Entrada para la API Key
-ke = st.text_input('Ingresa tu Clave', type="password")
-os.environ['OPENAI_API_KEY'] = ke
-api_key = os.environ.get('OPENAI_API_KEY', None)
+def on_publish(client, userdata, result):
+    print("✅ Mensaje MQTT enviado.")
 
-# Validación de API Key
-if not api_key:
-    st.warning("Por favor ingresa tu API key para continuar.")
-    st.stop()
+mqtt_client = paho.Client(CLIENT_ID)
+mqtt_client.on_publish = on_publish
+mqtt_client.connect(BROKER, PORT)
 
-# Configurar API key para openai
-openai.api_key = api_key
+# --- INTERFAZ STREAMLIT ---
+st.set_page_config(page_title="Reconocimiento Facial", layout="centered")
+st.title("📸 Desbloqueo de Puerta con Reconocimiento Facial")
 
-# Subida de imagen
-uploaded_file = st.file_uploader("Sube una imagen", type=["jpg", "png", "jpeg"])
+uploaded_image = st.file_uploader("Sube una imagen para verificar acceso:", type=["jpg", "jpeg", "png"])
 
-if uploaded_file:
-    try:
-        # Intentamos abrir la imagen con PIL
-        image = Image.open(uploaded_file)
-        with st.expander("Imagen", expanded=True):
-            st.image(image, caption=uploaded_file.name, width=700)  # Ajusta el tamaño si deseas
+if uploaded_image is not None:
+    image = Image.open(uploaded_image)
+    st.image(image, caption="Imagen subida", use_column_width=True)
 
-    except Exception as e:
-        st.error(f"No se pudo mostrar la imagen. Asegúrate de que sea un archivo de imagen válido. Error: {e}")
-        st.stop()
+    # Codifica la imagen en base64
+    buffered = open(uploaded_image.name, "rb")
+    image_bytes = buffered.read()
+    image_base64 = base64.b64encode(image_bytes).decode("utf-8")
 
-    # Botón para análisis
-    analyze_button = st.button("Analiza la imagen")
+    # Envía a GPT-4o con visión
+    prompt = "¿Puedes confirmar si hay una figura humana en esta imagen? Responde solo sí o no."
 
-    if analyze_button:
-        with st.spinner("Analizando..."):
-            base64_image = encode_image(uploaded_file)
+    response = openai.ChatCompletion.create(
+        model="gpt-4o",
+        messages=[
+            {"role": "system", "content": "Eres un detector de personas experto."},
+            {"role": "user", "content": [
+                {"type": "text", "text": prompt},
+                {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{image_base64}"}}
+            ]}
+        ],
+        temperature=0.2
+    )
 
-            # Pregunta simple al modelo
-            prompt_text = (
-                "¿Hay una persona o humano en esta imagen? "
-                "Responde solo 'Sí' o 'No' y justifica brevemente en español."
-            )
+    respuesta = response["choices"][0]["message"]["content"]
+    respuesta_lower = respuesta.strip().lower()
 
-            messages = [
-                {
-                    "role": "user",
-                    "content": [
-                        {"type": "text", "text": prompt_text},
-                        {
-                            "type": "image_url",
-                            "image_url": {
-                                "url": f"data:image/jpeg;base64,{base64_image}"
-                            }
-                        },
-                    ],
-                }
-            ]
+    st.markdown("### 🤖 Respuesta del modelo:")
+    st.info(respuesta)
 
-            try:
-                response = openai.ChatCompletion.create(
-                    model="gpt-4o",
-                    messages=messages,
-                    max_tokens=150
-                )
-                full_response = response['choices'][0]['message']['content']
-                respuesta_lower = full_response.lower()
+    # Lógica de decisión y MQTT
+    if "sí" in respuesta_lower or "si" in respuesta_lower:
+        st.success("✅ Puerta desbloqueada (humano detectado)")
+        msg = json.dumps({"codigo": "casa"})
+    else:
+        st.error("❌ Incorrecto (no se detectó humano)")
+        msg = json.dumps({"codigo": "incorrecto"})
 
-                if "sí" in respuesta_lower or "si" in respuesta_lower:
-                    st.success("✅ Reconocimiento positivo: Se detecta humano en la imagen.")
-                    st.info(f"Respuesta del modelo: {full_response}")
-                else:
-                    st.error("❌ Verificación no exitosa: No se detecta humano en la imagen.")
-                    st.info(f"Respuesta del modelo: {full_response}")
-
-            except Exception as e:
-                st.error(f"Error al analizar la imagen: {e}")
-else:
-    st.info("Por favor, sube una imagen para analizar.")
+    mqtt_client.publish("nicolas_ctrl", msg)
