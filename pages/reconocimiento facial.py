@@ -1,64 +1,76 @@
-import cv2
 import streamlit as st
-import openai
+import cv2
 import paho.mqtt.client as mqtt
+import os
+import openai
+from PIL import Image
+import numpy as np
 
-# 🔐 Clave API de OpenAI desde Secrets en Streamlit Cloud
-openai.api_key = st.secrets["openai_api_key"]
+# Configura la clave de OpenAI usando variable de entorno (como en tu código de voz)
+openai.api_key = os.environ.get("OPENAI_API_KEY")
 
-# 🟩 Configuración MQTT
-MQTT_BROKER = "broker.mqttdashboard.com"
-MQTT_PORT = 1883
-MQTT_TOPIC = "IMIA"
+# Configuración MQTT
+broker = "broker.mqttdashboard.com"
+puerto = 1883
+topico = "IMIA"
 
-client = mqtt.Client()
+cliente_mqtt = mqtt.Client()
 
-def connect_mqtt():
+# Conexión al broker MQTT
+def conectar_mqtt():
     try:
-        client.connect(MQTT_BROKER, MQTT_PORT, 60)
-        client.loop_start()
-        st.success("✅ Conectado a MQTT")
+        cliente_mqtt.connect(broker, puerto, 60)
+        cliente_mqtt.loop_start()
+        st.success("✅ Conectado al broker MQTT")
     except Exception as e:
-        st.error(f"❌ Error conectando a MQTT: {e}")
+        st.error(f"❌ Error al conectar MQTT: {e}")
 
-connect_mqtt()
+# Publica mensaje "casa"
+def enviar_mensaje_acceso():
+    cliente_mqtt.publish(topico, "casa")
+    st.success("📨 Mensaje MQTT enviado: 'casa'")
 
-st.title("🔍 Reconocimiento Facial + MQTT")
+# Título
+st.title("🔍 Reconocimiento Facial con MQTT")
 
-# 🔵 Cargar clasificador Haar para rostros
-face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + "haarcascade_frontalface_default.xml")
+# Botón para iniciar
+start = st.button("Iniciar cámara y detectar rostro")
 
-# 🟠 Inicializar la cámara
-cap = cv2.VideoCapture(0)
+if start:
+    conectar_mqtt()
 
-frame_window = st.image([])
+    # Carga del modelo Haar Cascade
+    face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + "haarcascade_frontalface_default.xml")
+    
+    cap = cv2.VideoCapture(0)
 
-face_detected_flag = False
+    if not cap.isOpened():
+        st.error("❌ No se pudo acceder a la cámara")
+    else:
+        st.info("🎥 Cámara encendida. Buscando rostros...")
 
-try:
-    while True:
-        ret, frame = cap.read()
-        if not ret:
-            st.warning("⚠️ No se pudo capturar la imagen.")
-            break
+        placeholder = st.empty()
 
-        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+        rostro_detectado = False
+        while not rostro_detectado:
+            ret, frame = cap.read()
+            if not ret:
+                break
 
-        faces = face_cascade.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=5)
+            gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+            faces = face_cascade.detectMultiScale(gray, 1.3, 5)
 
-        for (x, y, w, h) in faces:
-            cv2.rectangle(frame, (x, y), (x + w, y + h), (0, 255, 0), 2)
+            for (x, y, w, h) in faces:
+                rostro_detectado = True
+                cv2.rectangle(frame, (x, y), (x + w, y + h), (0, 255, 0), 2)
 
-        # 🟢 Si se detecta un rostro humano, enviar mensaje MQTT una sola vez
-        if len(faces) > 0 and not face_detected_flag:
-            st.success("👤 Humano detectado: Enviando mensaje MQTT...")
-            client.publish(MQTT_TOPIC, "casa")
-            face_detected_flag = True
+            frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            placeholder.image(frame_rgb, channels="RGB", caption="Detectando...")
 
-        frame_window.image(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
-except Exception as e:
-    st.error(f"❌ Error: {e}")
-finally:
-    cap.release()
-    client.loop_stop()
-    client.disconnect()
+            if rostro_detectado:
+                enviar_mensaje_acceso()
+                st.success("✅ Rostro detectado")
+                break
+
+        cap.release()
+        placeholder.empty()
