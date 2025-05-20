@@ -100,6 +100,6 @@ if result and "GET_TEXT" in result:
         st.error("❌ Incorrecto")
         msg = json.dumps({"codigo": "incorrecto"})
 
-    client.publish("voice_ctrl", msg)
+    client.publish("nicolas_ctrl", msg)
 
     os.makedirs("temp", exist_ok=True)
