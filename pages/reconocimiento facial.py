@@ -1,67 +1,64 @@
-import base64
-import openai
+import cv2
 import streamlit as st
-from PIL import Image
-import paho.mqtt.client as paho
-import json
+import openai
+import paho.mqtt.client as mqtt
 
-# --- CONFIGURACIÓN OPENAI ---
-openai.api_key = st.secrets["openai_api_key"]  # Asegúrate de configurar esto en Streamlit Secrets
+# 🔐 Clave API de OpenAI desde Secrets en Streamlit Cloud
+openai.api_key = st.secrets["openai_api_key"]
 
-# --- CONFIGURACIÓN MQTT ---
-BROKER = "broker.mqttdashboard.com"
-PORT = 1883
-CLIENT_ID = "FACIAL-MQTT"
+# 🟩 Configuración MQTT
+MQTT_BROKER = "broker.mqttdashboard.com"
+MQTT_PORT = 1883
+MQTT_TOPIC = "IMIA"
 
-def on_publish(client, userdata, result):
-    print("✅ Mensaje MQTT enviado.")
+client = mqtt.Client()
 
-mqtt_client = paho.Client(CLIENT_ID)
-mqtt_client.on_publish = on_publish
-mqtt_client.connect(BROKER, PORT)
+def connect_mqtt():
+    try:
+        client.connect(MQTT_BROKER, MQTT_PORT, 60)
+        client.loop_start()
+        st.success("✅ Conectado a MQTT")
+    except Exception as e:
+        st.error(f"❌ Error conectando a MQTT: {e}")
 
-# --- INTERFAZ STREAMLIT ---
-st.set_page_config(page_title="Reconocimiento Facial", layout="centered")
-st.title("📸 Desbloqueo de Puerta con Reconocimiento Facial")
+connect_mqtt()
 
-uploaded_image = st.file_uploader("Sube una imagen para verificar acceso:", type=["jpg", "jpeg", "png"])
+st.title("🔍 Reconocimiento Facial + MQTT")
 
-if uploaded_image is not None:
-    image = Image.open(uploaded_image)
-    st.image(image, caption="Imagen subida", use_column_width=True)
+# 🔵 Cargar clasificador Haar para rostros
+face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + "haarcascade_frontalface_default.xml")
 
-    # Codifica la imagen en base64
-    buffered = open(uploaded_image.name, "rb")
-    image_bytes = buffered.read()
-    image_base64 = base64.b64encode(image_bytes).decode("utf-8")
+# 🟠 Inicializar la cámara
+cap = cv2.VideoCapture(0)
 
-    # Envía a GPT-4o con visión
-    prompt = "¿Puedes confirmar si hay una figura humana en esta imagen? Responde solo sí o no."
+frame_window = st.image([])
 
-    response = openai.ChatCompletion.create(
-        model="gpt-4o",
-        messages=[
-            {"role": "system", "content": "Eres un detector de personas experto."},
-            {"role": "user", "content": [
-                {"type": "text", "text": prompt},
-                {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{image_base64}"}}
-            ]}
-        ],
-        temperature=0.2
-    )
+face_detected_flag = False
 
-    respuesta = response["choices"][0]["message"]["content"]
-    respuesta_lower = respuesta.strip().lower()
+try:
+    while True:
+        ret, frame = cap.read()
+        if not ret:
+            st.warning("⚠️ No se pudo capturar la imagen.")
+            break
 
-    st.markdown("### 🤖 Respuesta del modelo:")
-    st.info(respuesta)
+        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
 
-    # Lógica de decisión y MQTT
-    if "sí" in respuesta_lower or "si" in respuesta_lower:
-        st.success("✅ Puerta desbloqueada (humano detectado)")
-        msg = json.dumps({"codigo": "casa"})
-    else:
-        st.error("❌ Incorrecto (no se detectó humano)")
-        msg = json.dumps({"codigo": "incorrecto"})
+        faces = face_cascade.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=5)
 
-    mqtt_client.publish("nicolas_ctrl", msg)
+        for (x, y, w, h) in faces:
+            cv2.rectangle(frame, (x, y), (x + w, y + h), (0, 255, 0), 2)
+
+        # 🟢 Si se detecta un rostro humano, enviar mensaje MQTT una sola vez
+        if len(faces) > 0 and not face_detected_flag:
+            st.success("👤 Humano detectado: Enviando mensaje MQTT...")
+            client.publish(MQTT_TOPIC, "casa")
+            face_detected_flag = True
+
+        frame_window.image(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
+except Exception as e:
+    st.error(f"❌ Error: {e}")
+finally:
+    cap.release()
+    client.loop_stop()
+    client.disconnect()
