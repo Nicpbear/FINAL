@@ -1,76 +1,49 @@
 import streamlit as st
 import cv2
-import paho.mqtt.client as mqtt
-import os
-import openai
-from PIL import Image
 import numpy as np
+import paho.mqtt.client as mqtt
+from PIL import Image
+import io
 
-# Configura la clave de OpenAI usando variable de entorno (como en tu código de voz)
-openai.api_key = os.environ.get("OPENAI_API_KEY")
-
-# Configuración MQTT
-broker = "broker.mqttdashboard.com"
+# Configuración del broker MQTT
+broker = "broker.hivemq.com"
 puerto = 1883
-topico = "IMIA"
-
-cliente_mqtt = mqtt.Client()
+topico = "reconocimiento/facial"
 
 # Conexión al broker MQTT
-def conectar_mqtt():
-    try:
-        cliente_mqtt.connect(broker, puerto, 60)
-        cliente_mqtt.loop_start()
-        st.success("✅ Conectado al broker MQTT")
-    except Exception as e:
-        st.error(f"❌ Error al conectar MQTT: {e}")
+cliente = mqtt.Client()
+cliente.connect(broker, puerto, 60)
 
-# Publica mensaje "casa"
-def enviar_mensaje_acceso():
-    cliente_mqtt.publish(topico, "casa")
-    st.success("📨 Mensaje MQTT enviado: 'casa'")
+# Cargar el modelo de detección de rostros de OpenCV
+face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
 
-# Título
-st.title("🔍 Reconocimiento Facial con MQTT")
+# Título de la app
+st.title("Reconocimiento facial desde imagen")
 
-# Botón para iniciar
-start = st.button("Iniciar cámara y detectar rostro")
+# Cargar imagen desde el usuario
+imagen_subida = st.file_uploader("Sube una imagen", type=["jpg", "jpeg", "png"])
 
-if start:
-    conectar_mqtt()
+if imagen_subida is not None:
+    # Leer la imagen
+    imagen_pil = Image.open(imagen_subida).convert("RGB")
+    imagen_np = np.array(imagen_pil)
 
-    # Carga del modelo Haar Cascade
-    face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + "haarcascade_frontalface_default.xml")
-    
-    cap = cv2.VideoCapture(0)
+    # Convertir a escala de grises
+    imagen_gris = cv2.cvtColor(imagen_np, cv2.COLOR_RGB2GRAY)
 
-    if not cap.isOpened():
-        st.error("❌ No se pudo acceder a la cámara")
+    # Detectar rostros
+    rostros = face_cascade.detectMultiScale(imagen_gris, scaleFactor=1.1, minNeighbors=5)
+
+    # Dibujar rectángulos sobre los rostros
+    for (x, y, w, h) in rostros:
+        cv2.rectangle(imagen_np, (x, y), (x + w, y + h), (0, 255, 0), 2)
+
+    # Mostrar resultados
+    st.image(imagen_np, caption="Resultado", use_column_width=True)
+
+    # Enviar mensaje MQTT si hay al menos un rostro
+    if len(rostros) > 0:
+        cliente.publish(topico, '{"codigo": "casa"}')
+        st.success("Humano reconocido. Mensaje MQTT enviado: 'casa'")
     else:
-        st.info("🎥 Cámara encendida. Buscando rostros...")
-
-        placeholder = st.empty()
-
-        rostro_detectado = False
-        while not rostro_detectado:
-            ret, frame = cap.read()
-            if not ret:
-                break
-
-            gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-            faces = face_cascade.detectMultiScale(gray, 1.3, 5)
-
-            for (x, y, w, h) in faces:
-                rostro_detectado = True
-                cv2.rectangle(frame, (x, y), (x + w, y + h), (0, 255, 0), 2)
-
-            frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-            placeholder.image(frame_rgb, channels="RGB", caption="Detectando...")
-
-            if rostro_detectado:
-                enviar_mensaje_acceso()
-                st.success("✅ Rostro detectado")
-                break
-
-        cap.release()
-        placeholder.empty()
+        st.warning("No se detectaron rostros en la imagen.")
