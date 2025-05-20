@@ -1,105 +1,68 @@
-import os
-import time
-import json
-import paho.mqtt.client as paho
+import base64
+import openai
 import streamlit as st
 from PIL import Image
-from bokeh.models.widgets import Button
-from bokeh.models import CustomJS
-from streamlit_bokeh_events import streamlit_bokeh_events
+import paho.mqtt.client as paho
+import json
+
+# --- CONFIGURACIÓN OPENAI ---
+openai.api_key = st.secrets["openai_api_key"]  # Asegúrate de configurar esto en Streamlit Secrets
 
 # --- CONFIGURACIÓN MQTT ---
 BROKER = "broker.mqttdashboard.com"
 PORT = 1883
-CLIENT_ID = "CONTROL-VOZ-MQTT"
-
-message_received = ""
+CLIENT_ID = "FACIAL-MQTT"
 
 def on_publish(client, userdata, result):
     print("✅ Mensaje MQTT enviado.")
 
-def on_message(client, userdata, message):
-    global message_received
-    message_received = str(message.payload.decode("utf-8"))
-    st.success(f"📩 MQTT dice: {message_received}")
-
-client = paho.Client(CLIENT_ID)
-client.on_message = on_message
+mqtt_client = paho.Client(CLIENT_ID)
+mqtt_client.on_publish = on_publish
+mqtt_client.connect(BROKER, PORT)
 
 # --- INTERFAZ STREAMLIT ---
-st.set_page_config(page_title="Control por Voz", layout="centered")
-st.markdown("""
-    <style>
-    .big-title { font-size:36px; font-weight:bold; text-align:center; color:#4CAF50; }
-    .section-title { font-size:24px; margin-top:30px; color:#333; }
-    </style>
-""", unsafe_allow_html=True)
+st.set_page_config(page_title="Reconocimiento Facial", layout="centered")
+st.title("📸 Desbloqueo de Puerta con Reconocimiento Facial")
 
-st.markdown('<p class="big-title">Desbloqueo de puerta con código 🔑​</p>', unsafe_allow_html=True)
+uploaded_image = st.file_uploader("Sube una imagen para verificar acceso:", type=["jpg", "jpeg", "png"])
 
-# Imagen decorativa
-st.image("voice_ctrl.jpg", width=250, caption="Control por Voz Activado")
+if uploaded_image is not None:
+    image = Image.open(uploaded_image)
+    st.image(image, caption="Imagen subida", use_column_width=True)
 
-# Expansor para instrucciones
-with st.expander("🧭 ¿Cómo usar esta aplicación?"):
-    st.markdown("""
-    1. Haz clic en el botón de inicio.
-    2. Di la palabra `"casa"`.
-    3. Si dices "casa" o "casa." recibirás el mensaje "Puerta desbloqueada".
-    4. Si dices otra cosa, mostrará "Incorrecto".
-    5. El comando se enviará vía MQTT sólo si es correcto.
-    """)
+    # Codifica la imagen en base64
+    buffered = open(uploaded_image.name, "rb")
+    image_bytes = buffered.read()
+    image_base64 = base64.b64encode(image_bytes).decode("utf-8")
 
-# Botón Bokeh personalizado
-st.markdown('<p class="section-title">🎙️ Presiona para hablar</p>', unsafe_allow_html=True)
+    # Envía a GPT-4o con visión
+    prompt = "¿Puedes confirmar si hay una figura humana en esta imagen? Responde solo sí o no."
 
-stt_button = Button(label="🔵 Iniciar Reconocimiento de Voz", width=300)
-stt_button.js_on_event("button_click", CustomJS(code="""
-    var recognition = new webkitSpeechRecognition();
-    recognition.continuous = true;
-    recognition.interimResults = true;
+    response = openai.ChatCompletion.create(
+        model="gpt-4o",
+        messages=[
+            {"role": "system", "content": "Eres un detector de personas experto."},
+            {"role": "user", "content": [
+                {"type": "text", "text": prompt},
+                {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{image_base64}"}}
+            ]}
+        ],
+        temperature=0.2
+    )
 
-    recognition.onresult = function (e) {
-        var value = "";
-        for (var i = e.resultIndex; i < e.results.length; ++i) {
-            if (e.results[i].isFinal) {
-                value += e.results[i][0].transcript;
-            }
-        }
-        if (value !== "") {
-            document.dispatchEvent(new CustomEvent("GET_TEXT", { detail: value }));
-        }
-    };
-    recognition.start();
-"""))
+    respuesta = response["choices"][0]["message"]["content"]
+    respuesta_lower = respuesta.strip().lower()
 
-# Captura del evento
-result = streamlit_bokeh_events(
-    stt_button,
-    events="GET_TEXT",
-    key="listener",
-    refresh_on_update=False,
-    override_height=100,
-    debounce_time=0
-)
+    st.markdown("### 🤖 Respuesta del modelo:")
+    st.info(respuesta)
 
-# Resultado del reconocimiento
-if result and "GET_TEXT" in result:
-    command = result.get("GET_TEXT").strip().lower()  # lowercase para comparar sin error
-    
-    st.markdown('<p class="section-title">📋 Comando Reconocido:</p>', unsafe_allow_html=True)
-    st.code(command, language='markdown')
-
-    client.on_publish = on_publish
-    client.connect(BROKER, PORT)
-
-    if command in ["casa", "casa."]:
-        st.success("✅ Puerta desbloqueada")
+    # Lógica de decisión y MQTT
+    if "sí" in respuesta_lower or "si" in respuesta_lower:
+        st.success("✅ Puerta desbloqueada (humano detectado)")
         msg = json.dumps({"codigo": "casa"})
     else:
-        st.error("❌ Incorrecto")
+        st.error("❌ Incorrecto (no se detectó humano)")
         msg = json.dumps({"codigo": "incorrecto"})
 
-    client.publish("nicolas_ctrl", msg)
+    mqtt_client.publish("nicolas_ctrl", msg)
 
-    os.makedirs("temp", exist_ok=True)
