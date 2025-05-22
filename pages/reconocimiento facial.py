@@ -9,7 +9,8 @@ BROKER = "broker.mqttdashboard.com"
 PORT = 1883
 CLIENT_ID = "CONTROL-VOZ-MQTT"
 
-client = mqtt.Client(CLIENT_ID)
+client = mqtt.Client(client_id=CLIENT_ID)
+
 
 def on_publish(client, userdata, mid):
     st.info(f"Mensaje publicado con id: {mid}")
