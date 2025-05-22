@@ -9,21 +9,45 @@ import os
 # --- CONFIGURACIÓN MQTT ---
 BROKER = "broker.mqttdashboard.com"
 PORT = 1883
-CLIENT_ID = "CONTROL-VOZ-MQTT"
+CLIENT_ID = "CONTROL-FACIAL-MQTT"
 
 client = mqtt.Client(CLIENT_ID)
 
-# Callback para cuando se publique un mensaje
 def on_publish(client, userdata, mid):
-    st.info(f"Mensaje publicado con id: {mid}")
+    st.info(f"📤 Mensaje publicado con ID: {mid}")
 
 # Modelo de detección de rostros OpenCV
 face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
 
-st.title("Reconocimiento facial desde imagen")
+# --- INTERFAZ ---
+st.set_page_config(page_title="Desbloqueo Facial", layout="centered")
 
-# Subir imagen
-imagen_subida = st.file_uploader("Sube una imagen", type=["jpg", "jpeg", "png"])
+st.markdown("""
+    <style>
+    .big-title { font-size:36px; font-weight:bold; text-align:center; color:#2196F3; }
+    .section-title { font-size:24px; margin-top:30px; color:#333; }
+    </style>
+""", unsafe_allow_html=True)
+
+st.markdown('<p class="big-title">Sistema de Desbloqueo Facial 🏠</p>', unsafe_allow_html=True)
+
+# Imagen decorativa (debes subir esta imagen a tu repositorio de GitHub y llamar desde allí si usas la app desplegada)
+st.image("face_unlock.jpg", width=250, caption="Reconocimiento Facial Activado")
+
+# Expansor para instrucciones
+with st.expander("🔎 ¿Cómo funciona el sistema?"):
+    st.markdown("""
+    1. Sube una imagen que contenga un rostro.
+    2. El sistema detectará automáticamente si hay un rostro presente.
+    3. Si se detecta un rostro, se asumirá un comando de desbloqueo correcto ("casa").
+    4. El comando será enviado vía MQTT.
+    5. Si no se detectan rostros, no se enviará ningún comando.
+    """)
+
+# Título sección
+st.markdown('<p class="section-title">📤 Sube tu imagen para verificar identidad</p>', unsafe_allow_html=True)
+
+imagen_subida = st.file_uploader("Selecciona una imagen (JPG, JPEG o PNG)", type=["jpg", "jpeg", "png"])
 
 if imagen_subida is not None:
     imagen_pil = Image.open(imagen_subida).convert("RGB")
@@ -35,12 +59,10 @@ if imagen_subida is not None:
     for (x, y, w, h) in rostros:
         cv2.rectangle(imagen_np, (x, y), (x + w, y + h), (0, 255, 0), 2)
 
-    st.image(imagen_np, caption="Resultado", use_column_width=True)
+    st.image(imagen_np, caption="Resultado del Análisis", use_column_width=True)
 
-    # Aquí simulamos el resultado del reconocimiento; si hay rostros, asumimos comando "casa"
     if len(rostros) > 0:
-        # Simulamos un "result" para integrar tu lógica
-        result = {"GET_TEXT": "casa"}
+        result = {"GET_TEXT": "casa"}  # Simulación
 
         if result and "GET_TEXT" in result:
             command = result.get("GET_TEXT").strip().lower()
@@ -52,14 +74,13 @@ if imagen_subida is not None:
             client.connect(BROKER, PORT)
 
             if command in ["casa", "casa."]:
-                st.success("✅ Puerta desbloqueada")
+                st.success("✅ Acceso concedido: Puerta desbloqueada")
                 msg = json.dumps({"codigo": "casa"})
             else:
-                st.error("❌ Incorrecto")
+                st.error("❌ Código incorrecto")
                 msg = json.dumps({"codigo": "incorrecto"})
 
             client.publish("nicolas_ctrl", msg)
-
             os.makedirs("temp", exist_ok=True)
     else:
-        st.warning("No se detectaron rostros en la imagen.")
+        st.warning("🚫 No se detectaron rostros en la imagen. Acceso denegado.")
