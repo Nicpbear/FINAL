@@ -1,10 +1,10 @@
 import streamlit as st
 import numpy as np
-import face_recognition
 from PIL import Image
 import json
 import paho.mqtt.client as mqtt
 import os
+from deepface import DeepFace
 
 # --- CONFIGURACIÓN MQTT ---
 BROKER = "broker.mqttdashboard.com"
@@ -16,7 +16,7 @@ client = mqtt.Client(CLIENT_ID)
 def on_publish(client, userdata, mid):
     st.info(f"Mensaje publicado con id: {mid}")
 
-st.title("Reconocimiento facial desde imagen (sin OpenCV)")
+st.title("Reconocimiento facial desde imagen (usando DeepFace)")
 
 imagen_subida = st.file_uploader("Sube una imagen", type=["jpg", "jpeg", "png"])
 
@@ -24,18 +24,14 @@ if imagen_subida:
     imagen_pil = Image.open(imagen_subida).convert("RGB")
     imagen_np = np.array(imagen_pil)
 
-    rostros = face_recognition.face_locations(imagen_np)
+    try:
+        # Analizar la imagen para detectar rostros
+        result = DeepFace.analyze(img_path=imagen_pil, actions=['emotion'], enforce_detection=False)
 
-    for (top, right, bottom, left) in rostros:
-        imagen_np[top:bottom, left:left] = [0, 255, 0]  # Colorea el rostro
+        if result:
+            st.image(imagen_np, caption="Resultado", use_column_width=True)
+            command = "casa"  # Simulamos que se reconoció el comando "casa"
 
-    st.image(imagen_np, caption="Resultado", use_column_width=True)
-
-    if len(rostros) > 0:
-        result = {"GET_TEXT": "casa"}
-
-        if result and "GET_TEXT" in result:
-            command = result.get("GET_TEXT").strip().lower()
             st.markdown('<p class="section-title">📋 Comando Reconocido:</p>', unsafe_allow_html=True)
             st.code(command, language='markdown')
 
@@ -51,5 +47,7 @@ if imagen_subida:
 
             client.publish("nicolas_ctrl", msg)
             os.makedirs("temp", exist_ok=True)
-    else:
-        st.warning("No se detectaron rostros en la imagen.")
+        else:
+            st.warning("No se detectaron rostros en la imagen.")
+    except Exception as e:
+        st.error(f"Error al analizar la imagen: {e}")
