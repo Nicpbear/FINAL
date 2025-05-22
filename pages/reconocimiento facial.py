@@ -34,7 +34,7 @@ st.markdown('<p class="big-title">Sistema de Desbloqueo Facial 🏠</p>', unsafe
 # Imagen decorativa (debes subir esta imagen a tu repositorio de GitHub y llamar desde allí si usas la app desplegada)
 st.image(
     "https://raw.githubusercontent.com/Nicpbear/FINAL/main/face_unlock.jpg",
-    width=900,
+    width=450,
     caption="Reconocimiento Facial Activado"
 )
 
