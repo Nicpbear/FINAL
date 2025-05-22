@@ -18,6 +18,9 @@ openai
 opencv-python
 opencv-python-headless
 paho-mqtt
-
+face_recognition
+numpy
+pillow
+paho-mqtt
 
 
