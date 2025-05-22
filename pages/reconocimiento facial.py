@@ -1,10 +1,8 @@
 import streamlit as st
-import numpy as np
 from PIL import Image
 import json
 import paho.mqtt.client as mqtt
-import os
-from deepface import DeepFace
+import random
 
 # --- CONFIGURACIÓN MQTT ---
 BROKER = "broker.mqttdashboard.com"
@@ -16,38 +14,33 @@ client = mqtt.Client(CLIENT_ID)
 def on_publish(client, userdata, mid):
     st.info(f"Mensaje publicado con id: {mid}")
 
-st.title("Reconocimiento facial desde imagen (usando DeepFace)")
+st.title("Reconocimiento facial simulado (solo imagen)")
 
+# Subida de imagen
 imagen_subida = st.file_uploader("Sube una imagen", type=["jpg", "jpeg", "png"])
 
 if imagen_subida:
     imagen_pil = Image.open(imagen_subida).convert("RGB")
-    imagen_np = np.array(imagen_pil)
+    st.image(imagen_pil, caption="Imagen subida", use_column_width=True)
 
-    try:
-        # Analizar la imagen para detectar rostros
-        result = DeepFace.analyze(img_path=imagen_pil, actions=['emotion'], enforce_detection=False)
+    # Simulación de "detección de rostro"
+    st.markdown("🔍 Simulando análisis de imagen...")
 
-        if result:
-            st.image(imagen_np, caption="Resultado", use_column_width=True)
-            command = "casa"  # Simulamos que se reconoció el comando "casa"
+    # Aquí podrías usar heurísticas (como tamaño de imagen o colores predominantes)
+    # Para este ejemplo, usaremos una simulación aleatoria (80% probabilidad de detectar humano)
+    detectado = random.choices(["humano", "no humano"], weights=[0.8, 0.2], k=1)[0]
 
-            st.markdown('<p class="section-title">📋 Comando Reconocido:</p>', unsafe_allow_html=True)
-            st.code(command, language='markdown')
+    if detectado == "humano":
+        st.success("✅ ¡Rostro humano detectado!")
 
-            client.on_publish = on_publish
-            client.connect(BROKER, PORT)
+        # Enviar mensaje MQTT
+        result = {"codigo": "casa"}
+        msg = json.dumps(result)
 
-            if command in ["casa", "casa."]:
-                st.success("✅ Puerta desbloqueada")
-                msg = json.dumps({"codigo": "casa"})
-            else:
-                st.error("❌ Incorrecto")
-                msg = json.dumps({"codigo": "incorrecto"})
+        client.on_publish = on_publish
+        client.connect(BROKER, PORT)
+        client.publish("nicolas_ctrl", msg)
 
-            client.publish("nicolas_ctrl", msg)
-            os.makedirs("temp", exist_ok=True)
-        else:
-            st.warning("No se detectaron rostros en la imagen.")
-    except Exception as e:
-        st.error(f"Error al analizar la imagen: {e}")
+        st.info("📡 Comando enviado vía MQTT")
+    else:
+        st.warning("❌ No se detectó un rostro humano.")
