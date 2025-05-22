@@ -15,7 +15,6 @@ bokeh==2.4.3
 Streamlit-bokeh-events
 streamlit 
 openai
-opencv-python
 opencv-python-headless
 paho-mqtt
 face_recognition
