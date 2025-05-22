@@ -1,5 +1,4 @@
 streamlit
-deepface
 paho-mqtt
 numpy==1.26.3
 pillow>=7.1.0
