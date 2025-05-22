@@ -27,33 +27,50 @@ client = paho.Client(CLIENT_ID)
 client.on_message = on_message
 
 # --- INTERFAZ STREAMLIT ---
-st.set_page_config(page_title="Control por Voz", layout="centered")
+st.set_page_config(page_title="Acceso Inteligente por Voz", layout="centered")
 st.markdown("""
     <style>
-    .big-title { font-size:36px; font-weight:bold; text-align:center; color:#4CAF50; }
-    .section-title { font-size:24px; margin-top:30px; color:#333; }
+    .big-title {
+        font-size: 40px;
+        font-weight: bold;
+        text-align: center;
+        color: #2E86C1;
+        margin-bottom: 10px;
+    }
+    .section-title {
+        font-size: 22px;
+        margin-top: 30px;
+        color: #154360;
+        font-weight: bold;
+    }
+    .instructions {
+        font-size: 16px;
+        color: #424949;
+    }
     </style>
 """, unsafe_allow_html=True)
 
-st.markdown('<p class="big-title">Desbloqueo de puerta con código 🔑​</p>', unsafe_allow_html=True)
+st.markdown('<p class="big-title">🔒 Acceso Inteligente por Reconocimiento de Voz</p>', unsafe_allow_html=True)
 
 # Imagen decorativa
-st.image("voice_ctrl.jpg", width=250, caption="Control por Voz Activado")
+st.image("voice_ctrl.jpg", width=280, caption="Sistema de Seguridad Activado")
 
 # Expansor para instrucciones
-with st.expander("🧭 ¿Cómo usar esta aplicación?"):
+with st.expander("ℹ️ Cómo usar el sistema de acceso"):
     st.markdown("""
-    1. Haz clic en el botón de inicio.
-    2. Di la palabra "casa".
-    3. Si dices "casa" o "casa." recibirás el mensaje "Puerta desbloqueada".
-    4. Si dices otra cosa, mostrará "Incorrecto".
-    5. El comando se enviará vía MQTT sólo si es correcto.
-    """)
+    <div class="instructions">
+    1. Presiona el botón <b>Iniciar Reconocimiento de Voz</b>.<br>
+    2. Pronuncia la palabra clave: <code>casa</code>.<br>
+    3. Si el sistema detecta la palabra clave, <b>desbloqueará la puerta</b>.<br>
+    4. Si dices otra palabra, el acceso será denegado.<br>
+    5. El sistema envía el resultado a través de MQTT.
+    </div>
+    """, unsafe_allow_html=True)
 
 # Botón Bokeh personalizado
-st.markdown('<p class="section-title">🎙️ Presiona para hablar</p>', unsafe_allow_html=True)
+st.markdown('<p class="section-title">🎤 Activar Reconocimiento de Voz</p>', unsafe_allow_html=True)
 
-stt_button = Button(label="🔵 Iniciar Reconocimiento de Voz", width=300)
+stt_button = Button(label="🎙️ Iniciar Reconocimiento de Voz", width=320)
 stt_button.js_on_event("button_click", CustomJS(code="""
     var recognition = new webkitSpeechRecognition();
     recognition.continuous = true;
@@ -85,19 +102,19 @@ result = streamlit_bokeh_events(
 
 # Resultado del reconocimiento
 if result and "GET_TEXT" in result:
-    command = result.get("GET_TEXT").strip().lower()  # lowercase para comparar sin error
+    command = result.get("GET_TEXT").strip().lower()
     
-    st.markdown('<p class="section-title">📋 Comando Reconocido:</p>', unsafe_allow_html=True)
+    st.markdown('<p class="section-title">📝 Palabra detectada:</p>', unsafe_allow_html=True)
     st.code(command, language='markdown')
 
     client.on_publish = on_publish
     client.connect(BROKER, PORT)
 
     if command in ["casa", "casa."]:
-        st.success("✅ Puerta desbloqueada")
+        st.success("🔓 Acceso concedido: Puerta desbloqueada")
         msg = json.dumps({"codigo": "casa"})
     else:
-        st.error("❌ Incorrecto")
+        st.error("⛔ Acceso denegado: Código incorrecto")
         msg = json.dumps({"codigo": "incorrecto"})
 
     client.publish("nicolas_ctrl", msg)
